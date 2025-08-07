@@ -1,0 +1,21 @@
+{
+  "name": "Ứng dụng Lồng tiếng AI",
+  "short_name": "AI Dubbing",
+  "description": "Ứng dụng dịch và lồng tiếng văn bản, ghi âm bằng AI.",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#1a1a2e",
+  "icons": [
+    {
+      "src": "long-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+    "src": "long-512x512.png",
+    "sizes": "512x512",
+    "type": "image/png"
+    }
+  ]
+}

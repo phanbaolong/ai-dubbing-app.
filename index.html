@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ứng dụng Lồng tiếng AI</title>
+    <!-- Tải Tailwind CSS để tạo giao diện đẹp và hiện đại -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+        }
+    </style>
+    <!-- Thêm Font Awesome để sử dụng icon micro -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+    <!-- Dòng code mới để liên kết tệp manifest.json -->
+    <link rel="manifest" href="manifest.json">
+</head>
+<body class="p-4 md:p-8 flex items-center justify-center min-h-screen">
+    <div class="container max-w-2xl bg-[#16213e] p-6 md:p-10 rounded-xl shadow-lg border border-indigo-700">
+        <!-- Logo và số điện thoại đã được cập nhật -->
+        <div class="flex flex-col items-center justify-center mb-6">
+            <!-- Đây là URL ảnh trực tiếp từ GitHub -->
+            <img src="https://raw.githubusercontent.com/phanbaolong/Ung_Dung_Nhap_Du_Lieu/main/long.png" alt="Logo QA" class="w-24 h-24 rounded-full mb-3 border-4 border-indigo-500 shadow-xl">
+            <h2 class="text-xl font-bold text-white">0919.393.588</h2>
+        </div>
+
+        <h1 class="text-3xl md:text-4xl font-bold text-center mb-6 text-white">Ứng dụng Lồng tiếng AI</h1>
+        <p class="text-center text-gray-400 mb-8">
+            Dán một đoạn văn bản tiếng nước ngoài hoặc sử dụng micro để ghi âm, AI sẽ dịch sang tiếng Việt và tạo giọng đọc.
+        </p>
+
+        <div class="mb-6">
+            <label for="foreign-text" class="block text-lg font-medium text-gray-300 mb-2">Văn bản tiếng nước ngoài:</label>
+            <textarea id="foreign-text" rows="4" class="w-full p-4 bg-[#0f1120] rounded-lg border border-indigo-500 focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-all duration-300 text-white placeholder-gray-500" placeholder="Nhập văn bản vào đây, ví dụ: 'Hello, how are you today?'"></textarea>
+        </div>
+
+        <div class="flex space-x-4">
+            <button id="record-button" class="flex-1 py-3 px-6 bg-gradient-to-r from-teal-500 to-green-600 text-white font-bold rounded-lg shadow-md hover:from-teal-600 hover:to-green-700 transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 focus:ring-offset-[#16213e]">
+                <i class="fas fa-microphone mr-2"></i>
+                <span id="record-button-text">Ghi âm</span>
+            </button>
+            <button id="dub-button" class="flex-1 py-3 px-6 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-bold rounded-lg shadow-md hover:from-indigo-600 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 focus:ring-offset-[#16213e]">
+                <span id="button-text">Dịch và Lồng tiếng</span>
+                <span id="spinner" class="hidden h-6 w-6 border-4 border-gray-200 border-t-transparent rounded-full animate-spin"></span>
+            </button>
+        </div>
+
+        <div id="message-box" class="mt-6 p-4 bg-[#232b4a] rounded-lg border border-purple-500 text-gray-300 hidden"></div>
+
+        <div id="results" class="mt-8 hidden">
+            <div class="bg-[#1f294a] p-5 rounded-xl border border-indigo-500 mb-6">
+                <h3 class="text-xl font-semibold mb-2 text-white">Văn bản đã dịch sang tiếng Việt:</h3>
+                <p id="translated-text" class="text-gray-200"></p>
+            </div>
+            
+            <h3 class="text-xl font-semibold mb-3 text-white">Nghe giọng AI lồng tiếng:</h3>
+            <audio id="audio-player" controls class="w-full bg-[#1f294a] rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"></audio>
+        </div>
+    </div>
+
+    <script type="module">
+        // Các hàm hỗ trợ để chuyển đổi dữ liệu âm thanh PCM từ API thành định dạng WAV có thể phát được.
+        function base64ToArrayBuffer(base64) {
+            const binary_string = window.atob(base64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binary_string.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        function pcmToWav(pcmData, sampleRate) {
+            const pcm16 = new Int16Array(pcmData);
+            const buffer = new ArrayBuffer(44 + pcm16.length * 2);
+            const view = new DataView(buffer);
+            let offset = 0;
+
+            function writeString(str) {
+                for (let i = 0; i < str.length; i++) {
+                    view.setUint8(offset + i, str.charCodeAt(i));
+                }
+                offset += str.length;
+            }
+
+            function writeUint32(uint32) {
+                view.setUint32(offset, uint32, true);
+                offset += 4;
+            }
+
+            function writeUint16(uint16) {
+                view.setUint16(offset, uint16, true);
+                offset += 2;
+            }
+
+            writeString('RIFF'); // Chunk ID
+            writeUint32(36 + pcm16.length * 2); // Chunk size
+            writeString('WAVE'); // Format
+            writeString('fmt '); // Subchunk1 ID
+            writeUint32(16); // Subchunk1 size
+            writeUint16(1); // Audio format (1 = PCM)
+            writeUint16(1); // Number of channels
+            writeUint32(sampleRate); // Sample rate
+            writeUint32(sampleRate * 2); // Byte rate
+            writeUint16(2); // Block align
+            writeUint16(16); // Bits per sample
+            writeString('data'); // Subchunk2 ID
+            writeUint32(pcm16.length * 2); // Subchunk2 size
+
+            for (let i = 0; i < pcm16.length; i++) {
+                view.setInt16(offset, pcm16[i], true);
+                offset += 2;
+            }
+
+            return new Blob([view], { type: 'audio/wav' });
+        }
+
+        // Khai báo các biến DOM
+        const foreignTextarea = document.getElementById('foreign-text');
+        const dubButton = document.getElementById('dub-button');
+        const recordButton = document.getElementById('record-button');
+        const recordButtonText = document.getElementById('record-button-text');
+        const translatedTextDiv = document.getElementById('translated-text');
+        const audioPlayer = document.getElementById('audio-player');
+        const resultsDiv = document.getElementById('results');
+        const messageBox = document.getElementById('message-box');
+        const buttonText = document.getElementById('button-text');
+        const spinner = document.getElementById('spinner');
+
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+
+        // Xử lý sự kiện khi nhấn nút ghi âm
+        recordButton.addEventListener('click', async () => {
+            if (isRecording) {
+                // Dừng ghi âm
+                mediaRecorder.stop();
+                isRecording = false;
+                recordButton.classList.remove('bg-red-600');
+                recordButton.classList.add('bg-gradient-to-r', 'from-teal-500', 'to-green-600');
+                recordButtonText.textContent = "Ghi âm";
+            } else {
+                // Bắt đầu ghi âm
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+                    
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        // Chuyển blob thành base64 để gửi đến API
+                        const reader = new FileReader();
+                        reader.readAsDataURL(audioBlob);
+                        reader.onloadend = async () => {
+                            const base64Audio = reader.result.split(',')[1];
+                            await processAudio(base64Audio);
+                        };
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    recordButton.classList.remove('bg-gradient-to-r', 'from-teal-500', 'to-green-600');
+                    recordButton.classList.add('bg-red-600');
+                    recordButtonText.textContent = "Đang ghi âm...";
+                    hideMessage();
+                    resultsDiv.classList.add('hidden');
+                    
+                } catch (error) {
+                    console.error("Lỗi khi truy cập micro:", error);
+                    showMessage("Không thể truy cập micro. Vui lòng cho phép truy cập.");
+                }
+            }
+        });
+
+        // Hàm xử lý âm thanh đã ghi
+        async function processAudio(base64Audio) {
+            setLoading(true);
+            try {
+                // Bước 1: Phiên âm giọng nói sang văn bản tiếng nước ngoài
+                const transcribedText = await transcribeAudio(base64Audio);
+                foreignTextarea.value = transcribedText;
+
+                // Bước 2: Dịch văn bản sang tiếng Việt
+                const translatedText = await translateText(transcribedText);
+                translatedTextDiv.textContent = translatedText;
+
+                // Bước 3: Tạo giọng nói từ văn bản đã dịch bằng Gemini-TTS
+                const audioUrl = await generateAudio(translatedText);
+                audioPlayer.src = audioUrl;
+                audioPlayer.play();
+
+                resultsDiv.classList.remove('hidden');
+            } catch (error) {
+                console.error("Lỗi trong quá trình xử lý âm thanh:", error);
+                showMessage("Đã có lỗi xảy ra khi xử lý âm thanh. Vui lòng thử lại.");
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        // Hàm gọi API để phiên âm giọng nói (chức năng này tạm thời chỉ là giả lập)
+        // **LƯU Ý QUAN TRỌNG:** API Speech-to-Text thực tế cần được tích hợp ở đây.
+        async function transcribeAudio(base64Audio) {
+            // Đây là một hàm giả lập. Trong thực tế, bạn sẽ gửi base64Audio tới một API STT.
+            // Ví dụ, mình sẽ giả định người dùng nói "Hello, how are you?"
+            // Thật không may, không có API nào khả dụng trong môi trường này để phiên âm giọng nói.
+            // Do đó, chúng ta sẽ giả định một văn bản đã được phiên âm.
+            return new Promise(resolve => setTimeout(() => {
+                const mockText = "Hello, how are you today? This is a test.";
+                showMessage("Đã ghi âm thành công. Phiên âm giả lập: " + mockText);
+                resolve(mockText);
+            }, 2000));
+        }
+
+        // Xử lý sự kiện khi nhấn nút dịch văn bản
+        dubButton.addEventListener('click', async () => {
+            const foreignText = foreignTextarea.value.trim();
+            if (!foreignText) {
+                showMessage("Vui lòng nhập văn bản để dịch.");
+                return;
+            }
+            
+            // Cập nhật trạng thái giao diện người dùng
+            setLoading(true);
+            hideMessage();
+
+            try {
+                // Bước 1: Dịch văn bản sang tiếng Việt bằng Gemini-2.5
+                const translatedText = await translateText(foreignText);
+                translatedTextDiv.textContent = translatedText;
+                
+                // Bước 2: Tạo giọng nói từ văn bản đã dịch bằng Gemini-TTS
+                const audioUrl = await generateAudio(translatedText);
+                audioPlayer.src = audioUrl;
+                audioPlayer.play();
+
+                resultsDiv.classList.remove('hidden');
+            } catch (error) {
+                console.error("Lỗi trong quá trình dịch và lồng tiếng:", error);
+                showMessage("Đã có lỗi xảy ra. Vui lòng thử lại.");
+            } finally {
+                setLoading(false);
+            }
+        });
+
+        // Hàm gọi API để dịch văn bản
+        async function translateText(text) {
+            const prompt = `Dịch đoạn văn bản sau sang tiếng Việt, chỉ trả về văn bản đã dịch: "${text}"`;
+            let chatHistory = [];
+            chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+            const payload = { contents: chatHistory };
+            const apiKey = "" 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+            const response = await fetchWithExponentialBackoff(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            if (result.candidates && result.candidates.length > 0 &&
+                result.candidates[0].content && result.candidates[0].content.parts &&
+                result.candidates[0].content.parts.length > 0) {
+                return result.candidates[0].content.parts[0].text;
+            } else {
+                throw new Error("Không thể dịch văn bản.");
+            }
+        }
+
+        // Hàm gọi API để tạo âm thanh từ văn bản
+        async function generateAudio(text) {
+            const payload = {
+                contents: [{
+                    parts: [{ text: text }]
+                }],
+                generationConfig: {
+                    responseModalities: ["AUDIO"],
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: { voiceName: "Kore" } // Giọng nói tiếng Việt
+                        }
+                    }
+                },
+                model: "gemini-2.5-flash-preview-tts"
+            };
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
+            
+            const response = await fetchWithExponentialBackoff(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+
+            const part = result?.candidates?.[0]?.content?.parts?.[0];
+            const audioData = part?.inlineData?.data;
+            const mimeType = part?.inlineData?.mimeType;
+
+            if (audioData && mimeType && mimeType.startsWith("audio/")) {
+                const sampleRateMatch = mimeType.match(/rate=(\d+)/);
+                const sampleRate = sampleRateMatch ? parseInt(sampleRateMatch[1], 10) : 16000;
+                const pcmData = base64ToArrayBuffer(audioData);
+                const wavBlob = pcmToWav(pcmData, sampleRate);
+                return URL.createObjectURL(wavBlob);
+            } else {
+                throw new Error("Không thể tạo âm thanh.");
+            }
+        }
+
+        // Hàm hỗ trợ để xử lý lỗi API (exponential backoff)
+        async function fetchWithExponentialBackoff(url, options, retries = 3, delay = 1000) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.status === 429) { // Throttling
+                        if (i === retries - 1) throw new Error('API request failed after multiple retries.');
+                        await new Promise(res => setTimeout(res, delay * Math.pow(2, i)));
+                        continue;
+                    }
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(`API error: ${response.status} - ${errorData.error.message}`);
+                    }
+                    return response;
+                } catch (error) {
+                    if (i === retries - 1) throw error;
+                    await new Promise(res => setTimeout(res, delay * Math.pow(2, i)));
+                }
+            }
+        }
+
+        // Cập nhật trạng thái giao diện người dùng
+        function setLoading(isLoading) {
+            if (isLoading) {
+                dubButton.disabled = true;
+                recordButton.disabled = true;
+                buttonText.classList.add('hidden');
+                spinner.classList.remove('hidden');
+            } else {
+                dubButton.disabled = false;
+                recordButton.disabled = false;
+                buttonText.classList.remove('hidden');
+                spinner.classList.add('hidden');
+            }
+        }
+
+        function showMessage(msg) {
+            messageBox.textContent = msg;
+            messageBox.classList.remove('hidden');
+            messageBox.classList.remove('bg-green-600', 'border-green-800');
+            messageBox.classList.add('bg-[#232b4a]', 'border-purple-500');
+        }
+
+        function hideMessage() {
+            messageBox.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
