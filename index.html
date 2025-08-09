@@ -257,7 +257,7 @@
             let chatHistory = [];
             chatHistory.push({ role: "user", parts: [{ text: prompt }] });
             const payload = { contents: chatHistory };
-            const apiKey = "AIzaSyBnSrh8eL3QZeTa0dhm6R4TBltFs19Ghs8" 
+            const apiKey = "AIzaSyBmgog-6QV1Qg1queBbvQmtGQ3VGvY7COo" 
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
             const response = await fetchWithExponentialBackoff(apiUrl, {
@@ -291,7 +291,7 @@
                 },
                 model: "gemini-2.5-flash-preview-tts"
             };
-            const apiKey = "AIzaSyBnSrh8eL3QZeTa0dhm6R4TBltFs19Ghs8";
+            const apiKey = "AIzaSyBmgog-6QV1Qg1queBbvQmtGQ3VGvY7COo";
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
             
             const response = await fetchWithExponentialBackoff(apiUrl, {
@@ -366,5 +366,6 @@
     </script>
 </body>
 </html>
+
 
 
