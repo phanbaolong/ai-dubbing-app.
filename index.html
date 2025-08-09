@@ -208,46 +208,17 @@
 
         // Hàm gọi API để phiên âm giọng nói (chức năng này tạm thời chỉ là giả lập)
         // **LƯU Ý QUAN TRỌNG:** API Speech-to-Text thực tế cần được tích hợp ở đây.
-       async function transcribeAudio(base64Audio) {
-    const apiKey = "AIzaSyBTO5Mekgq7OM5VnhbUYMiG67VM0m54TYQ"; // Thay bằng khóa API của bạn
-    const apiUrl = `https://speech.googleapis.com/v1/speech:recognize?key=${apiKey}`;
-
-    // Cấu hình yêu cầu API của Google
-    const payload = {
-        config: {
-            encoding: "WEBM_OPUS", // Định dạng mã hóa của audio (MediaRecorder mặc định tạo audio/webm)
-            sampleRateHertz: 48000, // Tốc độ lấy mẫu. MediaRecorder thường sử dụng 48000 Hz.
-            languageCode: "en-US", // Ngôn ngữ đầu vào. Bạn có thể thay đổi tùy ý.
-        },
-        audio: {
-            content: base64Audio,
-        },
-    };
-
-    const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Lỗi API Speech-to-Text:", errorData);
-        throw new Error(`Lỗi khi phiên âm giọng nói: ${errorData.error.message}`);
-    }
-
-    const result = await response.json();
-    const transcribedText = result.results
-        .map(res => res.alternatives[0].transcript)
-        .join(" ");
-
-    if (!transcribedText) {
-        throw new Error("Không thể phiên âm giọng nói. Vui lòng nói rõ hơn.");
-    }
-
-    showMessage("Đã ghi âm và phiên âm thành công!");
-    return transcribedText;
-}
+        async function transcribeAudio(base64Audio) {
+            // Đây là một hàm giả lập. Trong thực tế, bạn sẽ gửi base64Audio tới một API STT.
+            // Ví dụ, mình sẽ giả định người dùng nói "Hello, how are you?"
+            // Thật không may, không có API nào khả dụng trong môi trường này để phiên âm giọng nói.
+            // Do đó, chúng ta sẽ giả định một văn bản đã được phiên âm.
+            return new Promise(resolve => setTimeout(() => {
+                const mockText = "Hello, how are you today? This is a test.";
+                showMessage("Đã ghi âm thành công. Phiên âm giả lập: " + mockText);
+                resolve(mockText);
+            }, 2000));
+        }
 
         // Xử lý sự kiện khi nhấn nút dịch văn bản
         dubButton.addEventListener('click', async () => {
@@ -286,7 +257,7 @@
             let chatHistory = [];
             chatHistory.push({ role: "user", parts: [{ text: prompt }] });
             const payload = { contents: chatHistory };
-            const apiKey = "AIzaSyBTO5Mekgq7OM5VnhbUYMiG67VM0m54TYQ" 
+            const apiKey = "" 
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
             const response = await fetchWithExponentialBackoff(apiUrl, {
@@ -320,7 +291,7 @@
                 },
                 model: "gemini-2.5-flash-preview-tts"
             };
-            const apiKey = "AIzaSyBTO5Mekgq7OM5VnhbUYMiG67VM0m54TYQ";
+            const apiKey = "";
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
             
             const response = await fetchWithExponentialBackoff(apiUrl, {
@@ -395,9 +366,3 @@
     </script>
 </body>
 </html>
-
-
-
-
-
-
