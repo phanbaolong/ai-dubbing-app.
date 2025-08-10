@@ -62,295 +62,312 @@
     </div>
 
     <script type="module">
-    // HÃY DÁN KHÓA API MỚI CỦA BẠN VÀO ĐÂY
-    const GEMINI_API_KEY = "AIzaSyB-Q7JTChp7eOW8YbqHW1-qpVt5_B7VqFM";
-
-    // --- CÁC HÀM HỖ TRỢ CHUYỂN ĐỔI ÂM THANH (GIỮ NGUYÊN) ---
-    function base64ToArrayBuffer(base64) {
-        const binary_string = window.atob(base64);
-        const len = binary_string.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-            bytes[i] = binary_string.charCodeAt(i);
-        }
-        return bytes.buffer;
-    }
-
-    function pcmToWav(pcmData, sampleRate) {
-        const pcm16 = new Int16Array(pcmData);
-        const buffer = new ArrayBuffer(44 + pcm16.length * 2);
-        const view = new DataView(buffer);
-        let offset = 0;
-        function writeString(str) {
-            for (let i = 0; i < str.length; i++) {
-                view.setUint8(offset + i, str.charCodeAt(i));
+        // Các hàm hỗ trợ để chuyển đổi dữ liệu âm thanh PCM từ API thành định dạng WAV có thể phát được.
+        function base64ToArrayBuffer(base64) {
+            const binary_string = window.atob(base64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binary_string.charCodeAt(i);
             }
-            offset += str.length;
+            return bytes.buffer;
         }
-        function writeUint32(uint32) {
-            view.setUint32(offset, uint32, true);
-            offset += 4;
-        }
-        function writeUint16(uint16) {
-            view.setUint16(offset, uint16, true);
-            offset += 2;
-        }
-        writeString('RIFF');
-        writeUint32(36 + pcm16.length * 2);
-        writeString('WAVE');
-        writeString('fmt ');
-        writeUint32(16);
-        writeUint16(1);
-        writeUint16(1);
-        writeUint32(sampleRate);
-        writeUint32(sampleRate * 2);
-        writeUint16(2);
-        writeUint16(16);
-        writeString('data');
-        writeUint32(pcm16.length * 2);
-        for (let i = 0; i < pcm16.length; i++) {
-            view.setInt16(offset, pcm16[i], true);
-            offset += 2;
-        }
-        return new Blob([view], { type: 'audio/wav' });
-    }
 
-    // --- KHAI BÁO BIẾN DOM (GIỮ NGUYÊN) ---
-    const foreignTextarea = document.getElementById('foreign-text');
-    const dubButton = document.getElementById('dub-button');
-    const recordButton = document.getElementById('record-button');
-    const recordButtonText = document.getElementById('record-button-text');
-    const translatedTextDiv = document.getElementById('translated-text');
-    const audioPlayer = document.getElementById('audio-player');
-    const resultsDiv = document.getElementById('results');
-    const messageBox = document.getElementById('message-box');
-    const buttonText = document.getElementById('button-text');
-    const spinner = document.getElementById('spinner');
+        function pcmToWav(pcmData, sampleRate) {
+            const pcm16 = new Int16Array(pcmData);
+            const buffer = new ArrayBuffer(44 + pcm16.length * 2);
+            const view = new DataView(buffer);
+            let offset = 0;
 
-    let mediaRecorder;
-    let audioChunks = [];
-    let isRecording = false;
+            function writeString(str) {
+                for (let i = 0; i < str.length; i++) {
+                    view.setUint8(offset + i, str.charCodeAt(i));
+                }
+                offset += str.length;
+            }
 
-    // --- CÁC HÀM XỬ LÝ SỰ KIỆN VÀ GIAO DIỆN (GIỮ NGUYÊN) ---
-    recordButton.addEventListener('click', async () => {
-        if (isRecording) {
-            mediaRecorder.stop();
-            isRecording = false;
-            recordButton.classList.remove('bg-red-600');
-            recordButton.classList.add('bg-gradient-to-r', 'from-teal-500', 'to-green-600');
-            recordButtonText.textContent = "Ghi âm";
-        } else {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-                audioChunks = [];
-                mediaRecorder.ondataavailable = event => {
-                    audioChunks.push(event.data);
-                };
-                mediaRecorder.onstop = async () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    const reader = new FileReader();
-                    reader.readAsDataURL(audioBlob);
-                    reader.onloadend = async () => {
-                        const base64Audio = reader.result.split(',')[1];
-                        await processAudio(base64Audio);
+            function writeUint32(uint32) {
+                view.setUint32(offset, uint32, true);
+                offset += 4;
+            }
+
+            function writeUint16(uint16) {
+                view.setUint16(offset, uint16, true);
+                offset += 2;
+            }
+
+            writeString('RIFF'); // Chunk ID
+            writeUint32(36 + pcm16.length * 2); // Chunk size
+            writeString('WAVE'); // Format
+            writeString('fmt '); // Subchunk1 ID
+            writeUint32(16); // Subchunk1 size
+            writeUint16(1); // Audio format (1 = PCM)
+            writeUint16(1); // Number of channels
+            writeUint32(sampleRate); // Sample rate
+            writeUint32(sampleRate * 2); // Byte rate
+            writeUint16(2); // Block align
+            writeUint16(16); // Bits per sample
+            writeString('data'); // Subchunk2 ID
+            writeUint32(pcm16.length * 2); // Subchunk2 size
+
+            for (let i = 0; i < pcm16.length; i++) {
+                view.setInt16(offset, pcm16[i], true);
+                offset += 2;
+            }
+
+            return new Blob([view], { type: 'audio/wav' });
+        }
+
+        // Khai báo các biến DOM
+        const foreignTextarea = document.getElementById('foreign-text');
+        const dubButton = document.getElementById('dub-button');
+        const recordButton = document.getElementById('record-button');
+        const recordButtonText = document.getElementById('record-button-text');
+        const translatedTextDiv = document.getElementById('translated-text');
+        const audioPlayer = document.getElementById('audio-player');
+        const resultsDiv = document.getElementById('results');
+        const messageBox = document.getElementById('message-box');
+        const buttonText = document.getElementById('button-text');
+        const spinner = document.getElementById('spinner');
+
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+
+        // Xử lý sự kiện khi nhấn nút ghi âm
+        recordButton.addEventListener('click', async () => {
+            if (isRecording) {
+                // Dừng ghi âm
+                mediaRecorder.stop();
+                isRecording = false;
+                recordButton.classList.remove('bg-red-600');
+                recordButton.classList.add('bg-gradient-to-r', 'from-teal-500', 'to-green-600');
+                recordButtonText.textContent = "Ghi âm";
+            } else {
+                // Bắt đầu ghi âm
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+                    
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
                     };
-                };
-                mediaRecorder.start();
-                isRecording = true;
-                recordButton.classList.remove('bg-gradient-to-r', 'from-teal-500', 'to-green-600');
-                recordButton.classList.add('bg-red-600');
-                recordButtonText.textContent = "Đang ghi âm...";
-                hideMessage();
-                resultsDiv.classList.add('hidden');
-            } catch (error) {
-                console.error("Lỗi khi truy cập micro:", error);
-                showMessage("Không thể truy cập micro. Vui lòng cấp quyền truy cập.");
-            }
-        }
-    });
 
-    dubButton.addEventListener('click', async () => {
-        const foreignText = foreignTextarea.value.trim();
-        if (!foreignText) {
-            showMessage("Vui lòng nhập văn bản để dịch.");
-            return;
-        }
-        setLoading(true);
-        hideMessage();
-        try {
-            const translatedText = await translateText(foreignText);
-            translatedTextDiv.textContent = translatedText;
-            const audioUrl = await generateAudio(translatedText);
-            audioPlayer.src = audioUrl;
-            audioPlayer.play();
-            resultsDiv.classList.remove('hidden');
-        } catch (error) {
-            console.error("Lỗi trong quá trình dịch và lồng tiếng:", error);
-            showMessage("Đã có lỗi xảy ra. Vui lòng thử lại. Lỗi: " + error.message);
-        } finally {
-            setLoading(false);
-        }
-    });
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        // Chuyển blob thành base64 để gửi đến API
+                        const reader = new FileReader();
+                        reader.readAsDataURL(audioBlob);
+                        reader.onloadend = async () => {
+                            const base64Audio = reader.result.split(',')[1];
+                            await processAudio(base64Audio);
+                        };
+                    };
 
-    async function processAudio(base64Audio) {
-        setLoading(true);
-        showMessage("Đã ghi âm. Đang xử lý phiên âm...");
-        try {
-            // Bước 1: Phiên âm giọng nói sang văn bản (dùng hàm thật)
-            const transcribedText = await transcribeAudio(base64Audio);
-            foreignTextarea.value = transcribedText;
-            showMessage("Đã phiên âm. Đang dịch và tạo giọng nói...");
-
-            // Bước 2 & 3: Dịch và tạo giọng nói
-            const translatedText = await translateText(transcribedText);
-            translatedTextDiv.textContent = translatedText;
-            const audioUrl = await generateAudio(translatedText);
-            audioPlayer.src = audioUrl;
-            audioPlayer.play();
-            resultsDiv.classList.remove('hidden');
-        } catch (error) {
-            console.error("Lỗi trong quá trình xử lý âm thanh:", error);
-            showMessage("Đã có lỗi xảy ra khi xử lý âm thanh. Lỗi: " + error.message);
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    // --- CÁC HÀM GỌI API ĐÃ SỬA LỖI VÀ NÂNG CẤP ---
-
-    /**
-     * HÀM PHIÊN ÂM THẬT SỬ DỤNG GEMINI
-     * Hàm này gửi file âm thanh base64 đến API của Gemini để nhận dạng giọng nói.
-     */
-    async function transcribeAudio(base64Audio) {
-        const model = 'gemini-1.5-flash-latest';
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-        
-        const payload = {
-            contents: [
-                {
-                    parts: [
-                        { text: "Transcribe the following audio recording. Provide only the transcribed text and nothing else:" },
-                        {
-                            inline_data: {
-                                mime_type: "audio/webm",
-                                data: base64Audio
-                            }
-                        }
-                    ]
+                    mediaRecorder.start();
+                    isRecording = true;
+                    recordButton.classList.remove('bg-gradient-to-r', 'from-teal-500', 'to-green-600');
+                    recordButton.classList.add('bg-red-600');
+                    recordButtonText.textContent = "Đang ghi âm...";
+                    hideMessage();
+                    resultsDiv.classList.add('hidden');
+                    
+                } catch (error) {
+                    console.error("Lỗi khi truy cập micro:", error);
+                    showMessage("Không thể truy cập micro. Vui lòng cho phép truy cập.");
                 }
-            ]
-        };
-
-        const response = await fetchWithExponentialBackoff(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const result = await response.json();
-        const transcribedText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-
-        if (transcribedText) {
-            return transcribedText.trim();
-        } else {
-            console.error("API Response for Transcription:", JSON.stringify(result, null, 2));
-            throw new Error("Không thể phiên âm giọng nói. Phản hồi API không hợp lệ.");
-        }
-    }
-
-    async function translateText(text) {
-        const model = 'gemini-1.5-flash-latest';
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-        const prompt = `Translate the following text to Vietnamese. Return only the translated text, without any additional explanations or introductory phrases: "${text}"`;
-        const payload = { contents: [{ parts: [{ text: prompt }] }] };
-
-        const response = await fetchWithExponentialBackoff(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const result = await response.json();
-        const translated = result.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (translated) {
-            return translated.trim();
-        } else {
-            console.error("API Response for Translation:", JSON.stringify(result, null, 2));
-            throw new Error("Không thể dịch văn bản.");
-        }
-    }
-
-    async function generateAudio(text) {
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/text-to-speech:synthesizeText?key=${GEMINI_API_KEY}`;
-        const payload = {
-            "input": { "text": text },
-            "voice": {
-              "languageCode": "vi-VN",
-              "name": "vi-VN-Standard-A" // Một giọng nữ khác của Google
-            },
-            "audioConfig": {
-              "audioEncoding": "LINEAR16",
-              "sampleRateHertz": 24000
             }
-        };
-
-        const response = await fetchWithExponentialBackoff(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
         });
-        const result = await response.json();
-        
-        const audioData = result.audioContent;
-        if (audioData) {
-            const pcmData = base64ToArrayBuffer(audioData);
-            const wavBlob = pcmToWav(pcmData, 24000); // 24000 khớp với sampleRateHertz
-            return URL.createObjectURL(wavBlob);
-        } else {
-            console.error("API Response for Audio Generation:", JSON.stringify(result, null, 2));
-            throw new Error("Không thể tạo âm thanh.");
-        }
-    }
 
-    // --- CÁC HÀM HỖ TRỢ (GIỮ NGUYÊN) ---
-    async function fetchWithExponentialBackoff(url, options, retries = 3, delay = 1000) {
-        for (let i = 0; i < retries; i++) {
+        // Hàm xử lý âm thanh đã ghi
+        async function processAudio(base64Audio) {
+            setLoading(true);
             try {
-                const response = await fetch(url, options);
-                if (response.status === 429) {
-                    if (i === retries - 1) throw new Error('API request failed after multiple retries.');
-                    await new Promise(res => setTimeout(res, delay * Math.pow(2, i)));
-                    continue;
-                }
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(`API error: ${response.status} - ${errorData.error.message}`);
-                }
-                return response;
+                // Bước 1: Phiên âm giọng nói sang văn bản tiếng nước ngoài
+                const transcribedText = await transcribeAudio(base64Audio);
+                foreignTextarea.value = transcribedText;
+
+                // Bước 2: Dịch văn bản sang tiếng Việt
+                const translatedText = await translateText(transcribedText);
+                translatedTextDiv.textContent = translatedText;
+
+                // Bước 3: Tạo giọng nói từ văn bản đã dịch bằng Gemini-TTS
+                const audioUrl = await generateAudio(translatedText);
+                audioPlayer.src = audioUrl;
+                audioPlayer.play();
+
+                resultsDiv.classList.remove('hidden');
             } catch (error) {
-                if (i === retries - 1) throw error;
-                await new Promise(res => setTimeout(res, delay * Math.pow(2, i)));
+                console.error("Lỗi trong quá trình xử lý âm thanh:", error);
+                showMessage("Đã có lỗi xảy ra khi xử lý âm thanh. Vui lòng thử lại.");
+            } finally {
+                setLoading(false);
             }
         }
-    }
-    function setLoading(isLoading) {
-        if (isLoading) {
-            dubButton.disabled = true;
-            recordButton.disabled = true;
-            buttonText.classList.add('hidden');
-            spinner.classList.remove('hidden');
-        } else {
-            dubButton.disabled = false;
-            recordButton.disabled = false;
-            buttonText.classList.remove('hidden');
-            spinner.classList.add('hidden');
+
+        // Hàm gọi API để phiên âm giọng nói (chức năng này tạm thời chỉ là giả lập)
+        // **LƯU Ý QUAN TRỌNG:** API Speech-to-Text thực tế cần được tích hợp ở đây.
+        async function transcribeAudio(base64Audio) {
+            // Đây là một hàm giả lập. Trong thực tế, bạn sẽ gửi base64Audio tới một API STT.
+            // Ví dụ, mình sẽ giả định người dùng nói "Hello, how are you?"
+            // Thật không may, không có API nào khả dụng trong môi trường này để phiên âm giọng nói.
+            // Do đó, chúng ta sẽ giả định một văn bản đã được phiên âm.
+            return new Promise(resolve => setTimeout(() => {
+                const mockText = "Hello, how are you today? This is a test.";
+                showMessage("Đã ghi âm thành công. Phiên âm giả lập: " + mockText);
+                resolve(mockText);
+            }, 2000));
         }
-    }
-    function showMessage(msg) {
-        messageBox.textContent = msg;
-        messageBox.classList.remove('hidden');
-    }
-    function hideMessage() {
-        messageBox.classList.add('hidden');
-    }
-</script>
+
+        // Xử lý sự kiện khi nhấn nút dịch văn bản
+        dubButton.addEventListener('click', async () => {
+            const foreignText = foreignTextarea.value.trim();
+            if (!foreignText) {
+                showMessage("Vui lòng nhập văn bản để dịch.");
+                return;
+            }
+            
+            // Cập nhật trạng thái giao diện người dùng
+            setLoading(true);
+            hideMessage();
+
+            try {
+                // Bước 1: Dịch văn bản sang tiếng Việt bằng Gemini-2.5
+                const translatedText = await translateText(foreignText);
+                translatedTextDiv.textContent = translatedText;
+                
+                // Bước 2: Tạo giọng nói từ văn bản đã dịch bằng Gemini-TTS
+                const audioUrl = await generateAudio(translatedText);
+                audioPlayer.src = audioUrl;
+                audioPlayer.play();
+
+                resultsDiv.classList.remove('hidden');
+            } catch (error) {
+                console.error("Lỗi trong quá trình dịch và lồng tiếng:", error);
+                showMessage("Đã có lỗi xảy ra. Vui lòng thử lại.");
+            } finally {
+                setLoading(false);
+            }
+        });
+
+        // Hàm gọi API để dịch văn bản
+        async function translateText(text) {
+            const prompt = `Dịch đoạn văn bản sau sang tiếng Việt, chỉ trả về văn bản đã dịch: "${text}"`;
+            let chatHistory = [];
+            chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+            const payload = { contents: chatHistory };
+            const apiKey = "AIzaSyBnSrh8eL3QZeTa0dhm6R4TBltFs19Ghs8" 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+            const response = await fetchWithExponentialBackoff(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            if (result.candidates && result.candidates.length > 0 &&
+                result.candidates[0].content && result.candidates[0].content.parts &&
+                result.candidates[0].content.parts.length > 0) {
+                return result.candidates[0].content.parts[0].text;
+            } else {
+                throw new Error("Không thể dịch văn bản.");
+            }
+        }
+
+        // Hàm gọi API để tạo âm thanh từ văn bản
+        async function generateAudio(text) {
+            const payload = {
+                contents: [{
+                    parts: [{ text: text }]
+                }],
+                generationConfig: {
+                    responseModalities: ["AUDIO"],
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: { voiceName: "Kore" } // Giọng nói tiếng Việt
+                        }
+                    }
+                },
+                model: "gemini-2.5-flash-preview-tts"
+            };
+            const apiKey = "AIzaSyBnSrh8eL3QZeTa0dhm6R4TBltFs19Ghs8";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
+            
+            const response = await fetchWithExponentialBackoff(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+
+            const part = result?.candidates?.[0]?.content?.parts?.[0];
+            const audioData = part?.inlineData?.data;
+            const mimeType = part?.inlineData?.mimeType;
+
+            if (audioData && mimeType && mimeType.startsWith("audio/")) {
+                const sampleRateMatch = mimeType.match(/rate=(\d+)/);
+                const sampleRate = sampleRateMatch ? parseInt(sampleRateMatch[1], 10) : 16000;
+                const pcmData = base64ToArrayBuffer(audioData);
+                const wavBlob = pcmToWav(pcmData, sampleRate);
+                return URL.createObjectURL(wavBlob);
+            } else {
+                throw new Error("Không thể tạo âm thanh.");
+            }
+        }
+
+        // Hàm hỗ trợ để xử lý lỗi API (exponential backoff)
+        async function fetchWithExponentialBackoff(url, options, retries = 3, delay = 1000) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.status === 429) { // Throttling
+                        if (i === retries - 1) throw new Error('API request failed after multiple retries.');
+                        await new Promise(res => setTimeout(res, delay * Math.pow(2, i)));
+                        continue;
+                    }
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(`API error: ${response.status} - ${errorData.error.message}`);
+                    }
+                    return response;
+                } catch (error) {
+                    if (i === retries - 1) throw error;
+                    await new Promise(res => setTimeout(res, delay * Math.pow(2, i)));
+                }
+            }
+        }
+
+        // Cập nhật trạng thái giao diện người dùng
+        function setLoading(isLoading) {
+            if (isLoading) {
+                dubButton.disabled = true;
+                recordButton.disabled = true;
+                buttonText.classList.add('hidden');
+                spinner.classList.remove('hidden');
+            } else {
+                dubButton.disabled = false;
+                recordButton.disabled = false;
+                buttonText.classList.remove('hidden');
+                spinner.classList.add('hidden');
+            }
+        }
+
+        function showMessage(msg) {
+            messageBox.textContent = msg;
+            messageBox.classList.remove('hidden');
+            messageBox.classList.remove('bg-green-600', 'border-green-800');
+            messageBox.classList.add('bg-[#232b4a]', 'border-purple-500');
+        }
+
+        function hideMessage() {
+            messageBox.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
+
+
+
+
+
