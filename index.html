@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -62,6 +63,7 @@
     </div>
 
     <script type="module">
+        const apiKey = "AIzaSyBnSrh8eL3QZeTa0dhm6R4TBltFs19Ghs8";
         // Các hàm hỗ trợ để chuyển đổi dữ liệu âm thanh PCM từ API thành định dạng WAV có thể phát được.
         function base64ToArrayBuffer(base64) {
             const binary_string = window.atob(base64);
@@ -206,19 +208,52 @@
             }
         }
 
-        // Hàm gọi API để phiên âm giọng nói (chức năng này tạm thời chỉ là giả lập)
-        // **LƯU Ý QUAN TRỌNG:** API Speech-to-Text thực tế cần được tích hợp ở đây.
-        async function transcribeAudio(base64Audio) {
-            // Đây là một hàm giả lập. Trong thực tế, bạn sẽ gửi base64Audio tới một API STT.
-            // Ví dụ, mình sẽ giả định người dùng nói "Hello, how are you?"
-            // Thật không may, không có API nào khả dụng trong môi trường này để phiên âm giọng nói.
-            // Do đó, chúng ta sẽ giả định một văn bản đã được phiên âm.
-            return new Promise(resolve => setTimeout(() => {
-                const mockText = "Hello, how are you today? This is a test.";
-                showMessage("Đã ghi âm thành công. Phiên âm giả lập: " + mockText);
-                resolve(mockText);
-            }, 2000));
-        }
+        // Hàm gọi API để phiên âm giọng nói (PHIÊN BẢN THẬT)
+async function transcribeAudio(base64Audio) {
+    // Sử dụng mô hình Gemini có khả năng xử lý âm thanh
+    const model = 'gemini-1.5-flash-latest'; 
+    
+    // Lấy API key từ biến đã khai báo (xem phần lưu ý bên dưới)
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+    // Chuẩn bị dữ liệu gửi đi, bao gồm cả câu lệnh và file âm thanh
+    const payload = {
+        contents: [
+            {
+                parts: [
+                    // Câu lệnh để hướng dẫn AI
+                    { text: "Chuyển đoạn ghi âm sau thành văn bản. Chỉ trả về duy nhất văn bản đã được phiên âm:" },
+                    // Dữ liệu âm thanh được gửi dưới dạng base64
+                    {
+                        inline_data: {
+                            mime_type: "audio/webm", // Định dạng do trình duyệt ghi lại
+                            data: base64Audio
+                        }
+                    }
+                ]
+            }
+        ]
+    };
+
+    // Gửi yêu cầu tới API
+    const response = await fetchWithExponentialBackoff(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const result = await response.json();
+
+    // Lấy văn bản từ kết quả trả về
+    const transcribedText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (transcribedText) {
+        return transcribedText.trim();
+    } else {
+        // Nếu không thành công, in lỗi ra console để kiểm tra
+        console.error("Lỗi phiên âm, phản hồi từ API:", JSON.stringify(result, null, 2));
+        throw new Error("Không thể phiên âm giọng nói. Vui lòng thử lại.");
+    }
+}
 
         // Xử lý sự kiện khi nhấn nút dịch văn bản
         dubButton.addEventListener('click', async () => {
@@ -256,8 +291,7 @@
             const prompt = `Dịch đoạn văn bản sau sang tiếng Việt, chỉ trả về văn bản đã dịch: "${text}"`;
             let chatHistory = [];
             chatHistory.push({ role: "user", parts: [{ text: prompt }] });
-            const payload = { contents: chatHistory };
-            const apiKey = "AIzaSyBnSrh8eL3QZeTa0dhm6R4TBltFs19Ghs8" 
+            const payload = { contents: chatHistory }; 
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
             const response = await fetchWithExponentialBackoff(apiUrl, {
@@ -291,7 +325,7 @@
                 },
                 model: "gemini-2.5-flash-preview-tts"
             };
-            const apiKey = "AIzaSyBnSrh8eL3QZeTa0dhm6R4TBltFs19Ghs8";
+    
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
             
             const response = await fetchWithExponentialBackoff(apiUrl, {
